@@ -165,14 +165,14 @@ adam-gui/
     │   ├── icons/                  # SVG icons
     │   └── images/                 # Splash screen, etc.
     │
-    └── tests/                      # Test suite
-        ├── conftest.py
-        ├── test_parameters.py
-        ├── test_param_writer.py
-        ├── test_output_parser.py
-        ├── test_pca_compute.py
-        ├── test_project_io.py
-        └── fixtures/               # Sample ADAM output files
+    └── tests/                      # Test suite (41 tests)
+        ├── conftest.py             # Shared fixtures
+        ├── test_parameters.py      # Parameter model round-trip tests
+        ├── test_pedigree.py        # Pedigree tree traversal tests
+        ├── test_demo_data.py       # Demo data generator tests
+        ├── test_pca_compute.py     # PCA computation tests
+        ├── test_services.py        # ParamWriter, Comparison, ProjectIO tests
+        └── fixtures/               # Sample ADAM output files (TODO)
 ```
 
 ## Architecture
@@ -324,17 +324,36 @@ P=Parameters  R=Runner  V=Results  3D=Visualizations  S=Settings
 +-----------------------------------------------+
 ```
 
-## Implementation Roadmap
+## Implementation Status
 
-| Phase | Scope | Milestone |
-|-------|-------|-----------|
-| **1. Foundation** | Project scaffold, data models, main window shell, themes | App launches with themed window and 4 navigable panels |
-| **2. Parameter Editor** | All parameter panels, save/load, param writer | Full parameter editing with file I/O |
-| **3. ADAM Integration** | Subprocess runner, queue, progress, demo data | Can run simulations with live progress |
-| **4. Result Viewer** | Output parser, tables, 2D charts | Browse results in tables and charts |
-| **5. Comparison** | Multi-run alignment, comparison views | Side-by-side run comparison |
-| **6. 3D Visualizations** | All 4 VTK pipelines + views | Interactive 3D pedigree, chromosomes, PCA, landscapes |
-| **7. Polish** | Icons, shortcuts, performance, tests | Production-ready MVP |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **1. Foundation** | Project scaffold, data models, main window, themes | Done |
+| **2. Parameter Editor** | All 9 parameter panels, save/load, collapsible sections | Done |
+| **3. ADAM Integration** | Subprocess runner, progress, demo data generator | Done |
+| **4. Result Viewer** | Output parser, 6 tabs (summary, population, breeding values, pedigree, genotype, comparison), 6 chart types | Done |
+| **5. Comparison** | Multi-run comparison service, comparison tab and chart | Done |
+| **6. 3D Visualizations** | 4 VTK pipelines + views (pedigree, chromosome, PCA scatter, landscape) | Done |
+| **7. Polish** | Test suite (41 tests passing) | Partial |
+
+### Remaining Work
+
+The core application is functional. The following items are still TODO:
+
+**Not yet implemented:**
+- `controllers/` — The 5 MVC controller files listed in the project structure. Currently, signal wiring is done directly in `app.py`. Refactoring into controllers would improve separation of concerns but is not blocking functionality.
+- `views/simulation_runner/queue_table.py`, `progress_panel.py`, `executable_config.py` — Runner sub-components. Currently all runner functionality lives in `runner_view.py`.
+- `widgets/toolbar.py` — Custom toolbar widget. Currently using inline QToolBar.
+- `assets/images/` — Splash screen and marketing images.
+- Sample ADAM output files in `tests/fixtures/` for integration testing the output parser against real data.
+
+**Needs testing / polish:**
+- VTK rendering on systems with GPU/display (developed headless — the offscreen Qt platform causes VTK core dumps, but should work fine on a real display).
+- Light theme chart colors (charts currently hardcoded to dark theme palette).
+- Keyboard shortcuts beyond Ctrl+1-4 navigation.
+- Large dataset performance profiling (LOD rendering for >5000 nodes).
+- Window state persistence (geometry, splitter positions).
+- Error handling audit (graceful fallbacks for missing ADAM executable, corrupt files, etc.).
 
 ## About ADAM
 
