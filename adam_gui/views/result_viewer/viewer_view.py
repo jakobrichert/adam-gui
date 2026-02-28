@@ -8,6 +8,9 @@ from adam_gui.models.results import SimulationResults
 from adam_gui.views.result_viewer.summary_tab import SummaryTab
 from adam_gui.views.result_viewer.population_tab import PopulationTab
 from adam_gui.views.result_viewer.breeding_values_tab import BreedingValuesTab
+from adam_gui.views.result_viewer.pedigree_tab import PedigreeTab
+from adam_gui.views.result_viewer.genotype_tab import GenotypeTab
+from adam_gui.views.result_viewer.comparison_tab import ComparisonTab
 
 
 class ResultViewerView(QWidget):
@@ -51,10 +54,16 @@ class ResultViewerView(QWidget):
         self.summary_tab = SummaryTab()
         self.population_tab = PopulationTab()
         self.breeding_values_tab = BreedingValuesTab()
+        self.pedigree_tab = PedigreeTab()
+        self.genotype_tab = GenotypeTab()
+        self.comparison_tab = ComparisonTab()
 
         self.tabs.addTab(self.summary_tab, "Summary")
         self.tabs.addTab(self.population_tab, "Population")
         self.tabs.addTab(self.breeding_values_tab, "Breeding Values")
+        self.tabs.addTab(self.pedigree_tab, "Pedigree")
+        self.tabs.addTab(self.genotype_tab, "Genotype")
+        self.tabs.addTab(self.comparison_tab, "Comparison")
 
         layout.addWidget(self.tabs)
 
@@ -63,6 +72,7 @@ class ResultViewerView(QWidget):
         label = f"{results.parameters.name if results.parameters else 'Run'} ({results.run_id[:8]})"
         self.run_selector.addItem(label)
         self.run_selector.setCurrentIndex(self.run_selector.count() - 1)
+        self.comparison_tab.add_results(results)
 
     def _on_run_selected(self, index: int):
         if 0 <= index < len(self._results):
@@ -77,3 +87,5 @@ class ResultViewerView(QWidget):
         self.summary_tab.set_results(self._current)
         self.population_tab.set_results(self._current)
         self.breeding_values_tab.set_results(self._current)
+        self.pedigree_tab.set_results(self._current)
+        self.genotype_tab.set_results(self._current)
