@@ -18,7 +18,44 @@ ADAM is a Fortran 95 stochastic simulation tool that models selective breeding p
 
 ## Screenshots
 
-*Coming soon*
+### Parameter Editor
+![Parameter Editor](screenshots/01_parameter_editor.png)
+
+### Results Summary
+![Results Summary](screenshots/03_results_summary.png)
+
+### Population Charts
+![Population Charts](screenshots/04_results_population.png)
+
+### Breeding Values Table
+![Breeding Values](screenshots/05_results_breeding_values.png)
+
+### Pedigree Browser
+![Pedigree Browser](screenshots/06_results_pedigree.png)
+
+### Genotype Heatmap
+![Genotype Heatmap](screenshots/07_results_genotype.png)
+
+### Multi-Run Comparison
+![Comparison](screenshots/08_results_comparison.png)
+
+### 3D Visualization Hub
+![Viz Hub](screenshots/09_viz_hub.png)
+
+### 3D Pedigree Network
+![Pedigree 3D](screenshots/10_viz_pedigree_3d.png)
+
+### 3D Chromosome Map
+![Chromosome 3D](screenshots/11_viz_chromosome_3d.png)
+
+### 3D PCA Scatter
+![PCA Scatter](screenshots/12_viz_pca_scatter_3d.png)
+
+### 3D Genetic Gain Landscape
+![Landscape 3D](screenshots/13_viz_landscape_3d.png)
+
+### Light Theme
+![Light Theme](screenshots/14_light_theme.png)
 
 ## Tech Stack
 
