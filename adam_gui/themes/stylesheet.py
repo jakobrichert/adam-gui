@@ -68,7 +68,6 @@ QLabel[role="kpi-delta-up"] { color: $accent; font-weight: 600; font-size: 12px;
 QLabel[role="kpi-delta-down"] { color: $danger; font-weight: 600; font-size: 12px; }
 QLabel[role="kpi-delta-flat"] { color: $text_muted; font-size: 12px; }
 QLabel[role="empty-title"] { font-size: 17px; font-weight: 650; color: $text; }
-QLabel[role="mono"] { font-family: "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono", monospace; }
 QLabel[role="badge"] {
     background-color: $surface_3; color: $text_muted;
     border-radius: 9px; padding: 2px 8px; font-size: 11px; font-weight: 600;
@@ -208,7 +207,6 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
 }
 QLineEdit[invalid="true"], QSpinBox[invalid="true"], QDoubleSpinBox[invalid="true"] { border-color: $danger; }
 QPlainTextEdit#Log {
-    font-family: "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
     font-size: 12px;
     background-color: $surface;
     border-radius: 10px;

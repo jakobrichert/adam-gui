@@ -9,7 +9,7 @@ from datetime import datetime
 from adam_gui.models.enums import OrganismType
 from adam_gui.models.results import SimulationResults
 from adam_gui.qt_compat import (
-    QAbstractItemView, QApplication, QColor, QGridLayout, QHBoxLayout, QHeaderView, QMenu,
+    QAbstractItemView, QApplication, QColor, QFontDatabase, QGridLayout, QHBoxLayout, QHeaderView, QMenu,
     QMessageBox, QPlainTextEdit, QProgressBar, QSplitter, Qt, QTableWidget,
     QTableWidgetItem, QTimer, QVBoxLayout, QWidget, Signal,
 )
@@ -227,6 +227,7 @@ class RunnerView(Page):
         log_card.header_actions.addWidget(clear_btn)
         self.log = QPlainTextEdit()
         self.log.setObjectName("Log")
+        self.log.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(10_000)
         self.log.setPlaceholderText("Simulation output will appear here.")
