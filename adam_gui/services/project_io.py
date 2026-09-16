@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import zlib
 from pathlib import Path
 from datetime import datetime
 
@@ -29,6 +31,29 @@ class _NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, (np.bool_,)):
             return bool(obj)
         return super().default(obj)
+
+
+FORMAT_VERSION = 2
+
+
+def _encode_array(arr: np.ndarray) -> dict:
+    """Pack an array as zlib-compressed little-endian bytes in base64."""
+    arr = np.ascontiguousarray(arr)
+    arr = arr.astype(arr.dtype.newbyteorder("<"), copy=False)
+    return {
+        "dtype": arr.dtype.str,
+        "shape": list(arr.shape),
+        "zlib_b64": base64.b64encode(zlib.compress(arr.tobytes(), 6)).decode("ascii"),
+    }
+
+
+def _decode_array(value, dtype) -> np.ndarray:
+    """Inverse of ``_encode_array``; also accepts the version 1 plain-list format."""
+    if isinstance(value, dict) and "zlib_b64" in value:
+        raw = zlib.decompress(base64.b64decode(value["zlib_b64"]))
+        arr = np.frombuffer(raw, dtype=np.dtype(value["dtype"])).reshape(value["shape"])
+        return arr.astype(dtype)
+    return np.array(value, dtype=dtype)
 
 
 def _serialize_results(results: SimulationResults) -> dict:
@@ -67,15 +92,15 @@ def _serialize_results(results: SimulationResults) -> dict:
         for g in results.generations
     ]
 
-    # Genotype data (store as lists for JSON)
+    # Genotype data (compressed binary arrays)
     geno = {}
     for gen, gd in results.genotype_data.items():
         geno[str(gen)] = {
-            "ids": gd.individual_ids.tolist(),
-            "matrix": gd.genotype_matrix.tolist(),
-            "chrom_idx": gd.chromosome_indices.tolist(),
-            "pos_cm": gd.marker_positions_cm.tolist(),
-            "pos_mb": gd.marker_positions_mb.tolist(),
+            "ids": _encode_array(np.asarray(gd.individual_ids, dtype=np.int64)),
+            "matrix": _encode_array(np.asarray(gd.genotype_matrix, dtype=np.int8)),
+            "chrom_idx": _encode_array(np.asarray(gd.chromosome_indices, dtype=np.int32)),
+            "pos_cm": _encode_array(np.asarray(gd.marker_positions_cm, dtype=np.float64)),
+            "pos_mb": _encode_array(np.asarray(gd.marker_positions_mb, dtype=np.float64)),
         }
     d["genotype_data"] = geno
 
@@ -131,11 +156,11 @@ def _deserialize_results(d: dict) -> SimulationResults:
     genotype_data = {}
     for gen_str, gd in d.get("genotype_data", {}).items():
         genotype_data[int(gen_str)] = GenotypeData(
-            individual_ids=np.array(gd["ids"], dtype=int),
-            genotype_matrix=np.array(gd["matrix"], dtype=np.int8),
-            chromosome_indices=np.array(gd["chrom_idx"], dtype=int),
-            marker_positions_cm=np.array(gd["pos_cm"], dtype=float),
-            marker_positions_mb=np.array(gd["pos_mb"], dtype=float),
+            individual_ids=_decode_array(gd["ids"], int),
+            genotype_matrix=_decode_array(gd["matrix"], np.int8),
+            chromosome_indices=_decode_array(gd["chrom_idx"], int),
+            marker_positions_cm=_decode_array(gd["pos_cm"], float),
+            marker_positions_mb=_decode_array(gd["pos_mb"], float),
         )
 
     qtl_info = [
@@ -185,7 +210,7 @@ class ProjectIO:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
-            "format_version": 1,
+            "format_version": FORMAT_VERSION,
             "name": project.name,
             "created_at": project.created_at,
             "modified_at": datetime.now().isoformat(),
@@ -196,7 +221,7 @@ class ProjectIO:
         }
 
         path.write_text(
-            json.dumps(data, cls=_NumpyEncoder, indent=2),
+            json.dumps(data, cls=_NumpyEncoder, separators=(",", ":")),
             encoding="utf-8",
         )
         project.file_path = str(path)

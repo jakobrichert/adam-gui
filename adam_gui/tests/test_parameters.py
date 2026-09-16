@@ -1,7 +1,5 @@
 """Tests for simulation parameter models."""
 
-import json
-import pytest
 
 from adam_gui.models.parameters import SimulationParameters, ChromosomeSpec, TraitSpec
 from adam_gui.models.enums import GeneticModel, SelectionStrategy, OrganismType

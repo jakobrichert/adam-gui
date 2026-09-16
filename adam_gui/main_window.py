@@ -1,276 +1,277 @@
-"""Main application window with sidebar navigation and stacked views."""
+"""Main application window: sidebar navigation, page stack, menus, status bar."""
 
-from pathlib import Path
+from __future__ import annotations
 
-from adam_gui.qt_compat import (
-    QMainWindow, QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout,
-    QToolBar, QToolButton, QButtonGroup, QStatusBar, QLabel,
-    QAction, QFileDialog, QMessageBox, QSizePolicy,
-    Qt, QSize, QIcon, Signal,
-)
 from adam_gui.constants import (
-    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
-    MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT,
-    SIDEBAR_WIDTH, SIDEBAR_ICON_SIZE,
-    PAGE_PARAMETERS, PAGE_RUNNER, PAGE_RESULTS, PAGE_VISUALIZATIONS, PAGE_SETTINGS,
-    APP_NAME,
+    APP_NAME, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, MIN_WINDOW_HEIGHT,
+    MIN_WINDOW_WIDTH, PAGE_KEYS, SIDEBAR_WIDTH,
 )
+from adam_gui.icons import bind_icon, pixmap
+from adam_gui.qt_compat import (
+    QAction, QButtonGroup, QHBoxLayout, QKeySequence, QLabel, QMainWindow, QMenu, QSizePolicy,
+    QStackedWidget, QStatusBar, Qt, QToolButton, QVBoxLayout, QWidget, Signal,
+)
+from adam_gui.themes import palette, theme
+from adam_gui.widgets.ui import set_role
 
-ICONS_DIR = Path(__file__).parent / "assets" / "icons"
+NAV_ITEMS = [
+    # key, label, icon, tooltip
+    ("parameters", "Setup", "sliders", "Simulation setup (Ctrl+1)"),
+    ("run", "Run", "play", "Run simulations (Ctrl+2)"),
+    ("results", "Results", "bar-chart", "Results and charts (Ctrl+3)"),
+    ("viz", "3D", "box", "3D explorer (Ctrl+4)"),
+]
 
 
-class PlaceholderPage(QWidget):
-    """Temporary placeholder for pages not yet implemented."""
-
-    def __init__(self, title: str, description: str, parent=None):
+class NavButton(QToolButton):
+    def __init__(self, text: str, icon: str, tooltip: str, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        title_label = QLabel(title)
-        title_label.setObjectName("heading")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        desc_label = QLabel(description)
-        desc_label.setObjectName("subheading")
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        layout.addWidget(title_label)
-        layout.addWidget(desc_label)
+        self.setObjectName("NavButton")
+        self.setText(text)
+        self.setToolTip(tooltip)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(58)
+        bind_icon(self, icon, role="text_muted", active_role="accent", size=22)
 
 
 class MainWindow(QMainWindow):
-    """Main application window."""
+    """Top-level window. Pages are installed by the application."""
 
     theme_toggle_requested = Signal()
+    close_requested = Signal(object)  # QCloseEvent; app decides accept/ignore
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(f"{APP_NAME}[*]")
         self.setMinimumSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        self._pages: dict[str, QWidget] = {}
+        self._build_actions()
+        self._build_menus()
+        self._build_central()
+        self._build_status_bar()
+        theme().changed.connect(self._on_theme_changed)
+        self._on_theme_changed()
 
-        self._setup_menu_bar()
-        self._setup_central()
-        self._setup_status_bar()
+    # ------------------------------------------------------------ actions
+    def _action(self, text: str, shortcut=None, tip: str = "", fallback: str = "") -> QAction:
+        act = QAction(text, self)
+        if shortcut is not None:
+            seq = QKeySequence(shortcut)
+            if seq.isEmpty() and fallback:  # some platforms define no standard key
+                seq = QKeySequence(fallback)
+            act.setShortcut(seq)
+        if tip:
+            act.setStatusTip(tip)
+            act.setToolTip(tip)
+        self.addAction(act)
+        return act
 
-    def _setup_menu_bar(self):
-        menu_bar = self.menuBar()
+    def _build_actions(self):
+        std = QKeySequence.StandardKey
+        self.action_new = self._action("&New Project", std.New)
+        self.action_open = self._action("&Open Project…", std.Open)
+        self.action_save = self._action("&Save Project", std.Save)
+        self.action_save_as = self._action("Save Project &As…", std.SaveAs)
+        self.action_import_params = self._action("Import Parameters…", None,
+                                                 "Load a .adam-params file into the editor")
+        self.action_export_params = self._action("Export Parameters…", None,
+                                                 "Save the current setup as a .adam-params file")
+        self.action_export_adam = self._action("Export ADAM Parameter File…", None,
+                                               "Write the setup in ADAM's text format")
+        self.action_import_results = self._action("Import ADAM Results Folder…", "Ctrl+I",
+                                                  "Load output files from an ADAM run")
+        self.action_quit = self._action("&Quit", std.Quit, fallback="Ctrl+Q")
+        self.action_quit.setMenuRole(QAction.MenuRole.QuitRole)
 
-        # File menu
-        file_menu = menu_bar.addMenu("&File")
-        self.action_new = QAction("&New Project", self)
-        self.action_new.setShortcut("Ctrl+N")
-        file_menu.addAction(self.action_new)
+        self.action_run = self._action("Run with &ADAM", "Ctrl+R")
+        self.action_demo = self._action("Run &Demo Simulation", "Ctrl+Shift+R")
+        self.action_stop = self._action("&Stop", "Ctrl+.")
+        self.action_stop.setEnabled(False)
 
-        self.action_open = QAction("&Open Project...", self)
-        self.action_open.setShortcut("Ctrl+O")
-        file_menu.addAction(self.action_open)
-
-        file_menu.addSeparator()
-
-        self.action_save = QAction("&Save Project", self)
-        self.action_save.setShortcut("Ctrl+S")
-        file_menu.addAction(self.action_save)
-
-        self.action_save_as = QAction("Save &As...", self)
-        self.action_save_as.setShortcut("Ctrl+Shift+S")
-        file_menu.addAction(self.action_save_as)
-
-        file_menu.addSeparator()
-
-        self.action_import_results = QAction("&Import Results Directory...", self)
-        file_menu.addAction(self.action_import_results)
-
-        file_menu.addSeparator()
-
-        self.action_quit = QAction("&Quit", self)
-        self.action_quit.setShortcut("Ctrl+Q")
-        self.action_quit.triggered.connect(self.close)
-        file_menu.addAction(self.action_quit)
-
-        # Simulation menu
-        sim_menu = menu_bar.addMenu("&Simulation")
-        self.action_run = QAction("&Run Simulation", self)
-        self.action_run.setShortcut("Ctrl+R")
-        sim_menu.addAction(self.action_run)
-
-        self.action_stop = QAction("&Stop Simulation", self)
-        sim_menu.addAction(self.action_stop)
-
-        sim_menu.addSeparator()
-
-        self.action_demo_data = QAction("&Generate Demo Data", self)
-        sim_menu.addAction(self.action_demo_data)
-
-        # View menu
-        view_menu = menu_bar.addMenu("&View")
-        self.action_toggle_theme = QAction("Toggle &Dark/Light Theme", self)
-        self.action_toggle_theme.setShortcut("Ctrl+T")
+        self.action_toggle_theme = self._action("Toggle Light/Dark Theme", "Ctrl+Shift+L")
         self.action_toggle_theme.triggered.connect(self.theme_toggle_requested.emit)
-        view_menu.addAction(self.action_toggle_theme)
+        self.nav_actions: dict[str, QAction] = {}
+        for i, (key, _text, _icon, _tip) in enumerate(NAV_ITEMS):
+            act = self._action({"parameters": "Setup", "run": "Run", "results": "Results",
+                                "viz": "3D Explorer"}[key], f"Ctrl+{i + 1}")
+            act.triggered.connect(lambda _=False, k=key: self.navigate_to(k))
+            self.nav_actions[key] = act
+        self.action_settings = self._action("Settings…", std.Preferences, fallback="Ctrl+,")
+        self.action_settings.setMenuRole(QAction.MenuRole.PreferencesRole)
+        self.action_settings.triggered.connect(lambda: self.navigate_to("settings"))
 
-        view_menu.addSeparator()
+        self.action_about = self._action("About ADAM GUI")
+        self.action_about.setMenuRole(QAction.MenuRole.AboutRole)
+        self.action_quick_start = self._action("Quick Start")
+        self.action_adam_site = self._action("ADAM Website")
 
-        self.action_goto_params = QAction("&Parameters", self)
-        self.action_goto_params.setShortcut("Ctrl+1")
-        self.action_goto_params.triggered.connect(lambda: self.navigate_to(PAGE_PARAMETERS))
-        view_menu.addAction(self.action_goto_params)
+    def _build_menus(self):
+        mb = self.menuBar()
+        m = mb.addMenu("&File")
+        m.addAction(self.action_new)
+        m.addAction(self.action_open)
+        self.recent_menu = QMenu("Open &Recent", self)
+        m.addMenu(self.recent_menu)
+        m.addSeparator()
+        m.addAction(self.action_save)
+        m.addAction(self.action_save_as)
+        m.addSeparator()
+        m.addAction(self.action_import_params)
+        m.addAction(self.action_export_params)
+        m.addAction(self.action_export_adam)
+        m.addSeparator()
+        m.addAction(self.action_import_results)
+        m.addSeparator()
+        m.addAction(self.action_settings)
+        m.addAction(self.action_quit)
 
-        self.action_goto_runner = QAction("&Runner", self)
-        self.action_goto_runner.setShortcut("Ctrl+2")
-        self.action_goto_runner.triggered.connect(lambda: self.navigate_to(PAGE_RUNNER))
-        view_menu.addAction(self.action_goto_runner)
+        m = mb.addMenu("&Simulation")
+        m.addAction(self.action_demo)
+        m.addAction(self.action_run)
+        m.addAction(self.action_stop)
 
-        self.action_goto_results = QAction("R&esults", self)
-        self.action_goto_results.setShortcut("Ctrl+3")
-        self.action_goto_results.triggered.connect(lambda: self.navigate_to(PAGE_RESULTS))
-        view_menu.addAction(self.action_goto_results)
+        m = mb.addMenu("&View")
+        for act in self.nav_actions.values():
+            m.addAction(act)
+        m.addSeparator()
+        m.addAction(self.action_toggle_theme)
 
-        self.action_goto_viz = QAction("3D &Visualizations", self)
-        self.action_goto_viz.setShortcut("Ctrl+4")
-        self.action_goto_viz.triggered.connect(lambda: self.navigate_to(PAGE_VISUALIZATIONS))
-        view_menu.addAction(self.action_goto_viz)
+        m = mb.addMenu("&Help")
+        m.addAction(self.action_quick_start)
+        m.addAction(self.action_adam_site)
+        m.addSeparator()
+        m.addAction(self.action_about)
 
-        # Help menu
-        help_menu = menu_bar.addMenu("&Help")
-        self.action_about = QAction("&About", self)
-        self.action_about.triggered.connect(self._show_about)
-        help_menu.addAction(self.action_about)
-
-    def _setup_central(self):
+    # ------------------------------------------------------------ layout
+    def _build_central(self):
         central = QWidget()
         self.setCentralWidget(central)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        h_layout = QHBoxLayout(central)
-        h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setSpacing(0)
-
-        # Sidebar
-        self.sidebar = QToolBar()
-        self.sidebar.setObjectName("sidebar")
-        self.sidebar.setOrientation(Qt.Orientation.Vertical)
-        self.sidebar.setMovable(False)
+        self.sidebar = QWidget()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.sidebar.setFixedWidth(SIDEBAR_WIDTH)
-        self.sidebar.setIconSize(QSize(SIDEBAR_ICON_SIZE, SIDEBAR_ICON_SIZE))
+        side = QVBoxLayout(self.sidebar)
+        side.setContentsMargins(10, 14, 10, 12)
+        side.setSpacing(4)
+
+        self.brand = QLabel()
+        self.brand.setObjectName("BrandMark")
+        self.brand.setFixedSize(40, 40)
+        self.brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.brand.setToolTip(f"{APP_NAME} — graphical front end for the ADAM breeding simulator")
+        side.addWidget(self.brand, 0, Qt.AlignmentFlag.AlignHCenter)
+        side.addSpacing(14)
 
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
+        self.nav_buttons: dict[str, NavButton] = {}
+        for key, text, icon, tip in NAV_ITEMS:
+            btn = NavButton(text, icon, tip)
+            btn.clicked.connect(lambda _=False, k=key: self.navigate_to(k))
+            self.nav_group.addButton(btn)
+            self.nav_buttons[key] = btn
+            side.addWidget(btn)
+        side.addStretch(1)
 
-        nav_items = [
-            ("Parameters", "parameters.svg", PAGE_PARAMETERS),
-            ("Runner", "runner.svg", PAGE_RUNNER),
-            ("Results", "chart.svg", PAGE_RESULTS),
-            ("3D Viz", "3d.svg", PAGE_VISUALIZATIONS),
-        ]
+        self.theme_button = QToolButton()
+        self.theme_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_button.setFixedSize(40, 36)
+        self.theme_button.clicked.connect(self.theme_toggle_requested.emit)
+        side.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.nav_buttons: list[QToolButton] = []
-        for label, icon_file, page_index in nav_items:
-            btn = QToolButton()
-            btn.setCheckable(True)
-            btn.setToolTip(label)
-            icon_path = ICONS_DIR / icon_file
-            if icon_path.exists():
-                btn.setIcon(QIcon(str(icon_path)))
-            else:
-                btn.setText(label[:2])
-            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            btn.setFixedHeight(48)
-            self.nav_group.addButton(btn, page_index)
-            self.sidebar.addWidget(btn)
-            self.nav_buttons.append(btn)
+        settings_btn = NavButton("Settings", "settings", "Settings (Ctrl+,)")
+        settings_btn.clicked.connect(lambda: self.navigate_to("settings"))
+        self.nav_group.addButton(settings_btn)
+        self.nav_buttons["settings"] = settings_btn
+        side.addWidget(settings_btn)
 
-        # Add separator and settings at bottom
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        self.sidebar.addWidget(spacer)
+        root.addWidget(self.sidebar)
 
-        settings_btn = QToolButton()
-        settings_btn.setCheckable(True)
-        settings_btn.setToolTip("Settings")
-        icon_path = ICONS_DIR / "settings.svg"
-        if icon_path.exists():
-            settings_btn.setIcon(QIcon(str(icon_path)))
-        else:
-            settings_btn.setText("S")
-        settings_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        settings_btn.setFixedHeight(48)
-        self.nav_group.addButton(settings_btn, PAGE_SETTINGS)
-        self.sidebar.addWidget(settings_btn)
-        self.nav_buttons.append(settings_btn)
-
-        h_layout.addWidget(self.sidebar)
-
-        # Stacked widget for pages
         self.stack = QStackedWidget()
-        self.stack.addWidget(PlaceholderPage(
-            "Parameter Editor",
-            "Configure ADAM simulation parameters"
-        ))
-        self.stack.addWidget(PlaceholderPage(
-            "Simulation Runner",
-            "Execute ADAM simulations and monitor progress"
-        ))
-        self.stack.addWidget(PlaceholderPage(
-            "Result Viewer",
-            "Browse simulation results and charts"
-        ))
-        self.stack.addWidget(PlaceholderPage(
-            "3D Visualizations",
-            "Interactive 3D views of breeding data"
-        ))
-        self.stack.addWidget(PlaceholderPage(
-            "Settings",
-            "Application settings and ADAM configuration"
-        ))
-        h_layout.addWidget(self.stack)
+        self.stack.setObjectName("PageStack")
+        root.addWidget(self.stack, 1)
 
-        # Wire navigation
-        self.nav_group.idClicked.connect(self.navigate_to)
-        self.nav_buttons[0].setChecked(True)
-
-    def _setup_status_bar(self):
+    def _build_status_bar(self):
         status = QStatusBar()
+        status.setSizeGripEnabled(False)
         self.setStatusBar(status)
-
-        self.adam_status_label = QLabel("ADAM: Not Found")
-        self.adam_status_label.setObjectName("muted")
-        status.addPermanentWidget(self.adam_status_label)
-
-        self.project_label = QLabel("Project: Untitled")
-        self.project_label.setObjectName("muted")
+        self.project_label = QLabel("Untitled project")
+        self.run_label = QLabel("")
         status.addWidget(self.project_label)
+        status.addWidget(self.run_label)
 
-    def navigate_to(self, page_index: int):
-        """Switch to a specific page."""
-        if 0 <= page_index < self.stack.count():
-            self.stack.setCurrentIndex(page_index)
-            btn = self.nav_group.button(page_index)
-            if btn:
-                btn.setChecked(True)
+        self.adam_badge = QLabel("ADAM not configured")
+        self.adam_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.adam_badge.setToolTip("Click to configure the ADAM executable")
+        self.adam_badge.mousePressEvent = lambda _e: self.navigate_to("settings")
+        set_role(self.adam_badge, "badge")
+        status.addPermanentWidget(self.adam_badge)
 
-    def set_page(self, index: int, widget: QWidget):
-        """Replace a placeholder page with a real widget."""
-        old = self.stack.widget(index)
-        self.stack.removeWidget(old)
-        old.deleteLater()
-        self.stack.insertWidget(index, widget)
+    # ------------------------------------------------------------ pages
+    def add_page(self, key: str, widget: QWidget):
+        self._pages[key] = widget
+        self.stack.addWidget(widget)
 
-    def set_adam_status(self, found: bool, path: str = ""):
-        if found:
-            self.adam_status_label.setText(f"ADAM: {path}")
+    def page(self, key: str) -> QWidget | None:
+        return self._pages.get(key)
+
+    def current_page_key(self) -> str:
+        current = self.stack.currentWidget()
+        for key, widget in self._pages.items():
+            if widget is current:
+                return key
+        return "parameters"
+
+    def navigate_to(self, key: str | int):
+        if isinstance(key, int):
+            key = PAGE_KEYS[key] if 0 <= key < len(PAGE_KEYS) else "parameters"
+        widget = self._pages.get(key)
+        if widget is None:
+            return
+        self.stack.setCurrentWidget(widget)
+        btn = self.nav_buttons.get(key)
+        if btn is not None:
+            btn.setChecked(True)
+
+    # ------------------------------------------------------------ status
+    def set_project_status(self, name: str, dirty: bool, path: str = ""):
+        self.setWindowTitle(f"{name} — {APP_NAME}[*]")
+        self.setWindowModified(dirty)
+        self.setWindowFilePath(path)
+        self.project_label.setText(f"{name}{'  •  unsaved changes' if dirty else ''}")
+        self.project_label.setToolTip(path or "Not saved yet")
+
+    def set_run_status(self, text: str):
+        self.run_label.setText(text)
+
+    def set_adam_status(self, available: bool, configured: bool, path: str = ""):
+        if available:
+            self.adam_badge.setText("ADAM ready")
+            set_role(self.adam_badge, "badge-accent")
+            self.adam_badge.setToolTip(path)
+        elif configured:
+            self.adam_badge.setText("ADAM not found")
+            set_role(self.adam_badge, "badge-danger")
+            self.adam_badge.setToolTip(f"Not an executable file: {path}\nClick to fix in Settings")
         else:
-            self.adam_status_label.setText("ADAM: Not Found")
+            self.adam_badge.setText("Demo mode · ADAM not configured")
+            set_role(self.adam_badge, "badge")
+            self.adam_badge.setToolTip("Click to configure the ADAM executable")
 
-    def set_project_name(self, name: str):
-        self.project_label.setText(f"Project: {name}")
+    def _on_theme_changed(self, *_):
+        p = palette()
+        self.brand.setPixmap(pixmap("sprout", p.on_accent, 24))
+        bind_icon(self.theme_button, "sun" if p.is_dark else "moon", role="text_muted",
+                  active_role=None, size=18)
+        self.theme_button.setToolTip("Switch to light theme" if p.is_dark else "Switch to dark theme")
 
-    def _show_about(self):
-        QMessageBox.about(
-            self,
-            f"About {APP_NAME}",
-            f"<h3>{APP_NAME}</h3>"
-            "<p>Desktop GUI with 3D visualizations for the "
-            "ADAM breeding simulator from Aarhus University.</p>"
-            "<p>Built with PyQt6 + VTK</p>"
-        )
+    def closeEvent(self, event):
+        self.close_requested.emit(event)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import numpy as np
 
 from adam_gui.models.results import SimulationResults
 
@@ -76,7 +75,7 @@ class ComparisonService:
                 series = r.get_metric_series(metric_name, trait_index)
                 run_gens = r.generation_numbers
                 # Align to common generation list
-                gen_to_val = dict(zip(run_gens, series))
+                gen_to_val = dict(zip(run_gens, series, strict=False))
                 aligned = [gen_to_val.get(g, float("nan")) for g in generations]
                 values_by_run[r.run_id] = aligned
 

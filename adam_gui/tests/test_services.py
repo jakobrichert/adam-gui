@@ -130,6 +130,59 @@ class TestProjectIO:
             loaded = io.load(path)
             assert len(loaded.runs[0].genotype_data) > 0
 
+    def test_genotype_round_trip(self):
+        results = DemoDataGenerator(seed=3).generate()
+        project = Project(name="Round trip")
+        project.add_run(results)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = ProjectIO().save(project, Path(tmpdir) / "rt.adam-project")
+            data = json.loads(path.read_text())
+            assert data["format_version"] == 2
+            stored = next(iter(data["runs"][0]["genotype_data"].values()))
+            assert "zlib_b64" in stored["matrix"]
+            loaded = ProjectIO().load(path).runs[0]
+
+        assert sorted(loaded.genotype_data) == sorted(results.genotype_data)
+        for gen, original in results.genotype_data.items():
+            restored = loaded.genotype_data[gen]
+            assert restored.genotype_matrix.dtype == np.int8
+            assert np.array_equal(restored.genotype_matrix, original.genotype_matrix)
+            assert np.array_equal(restored.individual_ids, original.individual_ids)
+            assert np.array_equal(restored.chromosome_indices, original.chromosome_indices)
+            assert np.allclose(restored.marker_positions_cm, original.marker_positions_cm)
+            assert np.allclose(restored.marker_positions_mb, original.marker_positions_mb)
+        assert loaded.generations[-1].mean_tbv == results.generations[-1].mean_tbv
+        assert loaded.qtl_info[0].allele_frequencies == results.qtl_info[0].allele_frequencies
+
+    def test_load_legacy_list_format(self, sample_results):
+        project = Project(name="Legacy")
+        project.add_run(sample_results)
+        matrix = [[0, 1, 2], [2, 1, 0]]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = ProjectIO().save(project, Path(tmpdir) / "legacy.adam-project")
+            data = json.loads(path.read_text())
+            data["format_version"] = 1
+            data["runs"][0]["genotype_data"] = {
+                "4": {
+                    "ids": [11, 12],
+                    "matrix": matrix,
+                    "chrom_idx": [0, 0, 1],
+                    "pos_cm": [1.0, 2.0, 3.0],
+                    "pos_mb": [1.5, 3.0, 4.5],
+                }
+            }
+            path.write_text(json.dumps(data, indent=2))
+            loaded = ProjectIO().load(path).runs[0]
+
+        gd = loaded.genotype_data[4]
+        assert gd.genotype_matrix.dtype == np.int8
+        assert gd.genotype_matrix.tolist() == matrix
+        assert gd.individual_ids.tolist() == [11, 12]
+        assert gd.chromosome_indices.tolist() == [0, 0, 1]
+        assert gd.marker_positions_mb.tolist() == [1.5, 3.0, 4.5]
+
     def test_load_missing_file(self):
         io = ProjectIO()
         with pytest.raises(FileNotFoundError):

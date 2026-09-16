@@ -1,8 +1,7 @@
 """Tests for pedigree tree model."""
 
-import pytest
 
-from adam_gui.models.pedigree import PedigreeTree, PedigreeNode
+from adam_gui.models.pedigree import PedigreeTree
 
 
 class TestPedigreeTree:

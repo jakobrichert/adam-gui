@@ -5,7 +5,6 @@ import pytest
 from adam_gui.models.parameters import SimulationParameters, ChromosomeSpec
 from adam_gui.models.results import (
     SimulationResults, IndividualRecord, GenerationSummary,
-    GenotypeData, QTLInfo,
 )
 from adam_gui.models.pedigree import PedigreeTree
 

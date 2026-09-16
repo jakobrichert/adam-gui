@@ -1,9 +1,7 @@
 """Tests for demo data generator."""
 
-import pytest
 
 from adam_gui.services.demo_data import DemoDataGenerator
-from adam_gui.models.parameters import SimulationParameters
 
 
 class TestDemoDataGenerator:
@@ -47,7 +45,7 @@ class TestDemoDataGenerator:
         gen = DemoDataGenerator(seed=42)
         results = gen.generate(small_params)
         assert len(results.genotype_data) > 0
-        for gen_num, gd in results.genotype_data.items():
+        for _gen_num, gd in results.genotype_data.items():
             assert gd.genotype_matrix.shape[0] > 0
             assert gd.genotype_matrix.shape[1] > 0
             # Genotypes should be 0, 1, or 2
@@ -62,12 +60,19 @@ class TestDemoDataGenerator:
             assert qtl.n_alleles == 2
             assert len(qtl.allele_effects) == 2
             assert qtl.position_cm >= 0
+            assert 0 <= qtl.chromosome < results.parameters.founder.n_chromosomes
 
     def test_deterministic_with_seed(self):
         results1 = DemoDataGenerator(seed=123).generate()
         results2 = DemoDataGenerator(seed=123).generate()
         assert len(results1.individuals) == len(results2.individuals)
         assert results1.individuals[0].tbv == results2.individuals[0].tbv
+        assert results1.generations[-1].mean_tbv == results2.generations[-1].mean_tbv
+
+    def test_different_seeds_differ(self):
+        results1 = DemoDataGenerator(seed=42).generate()
+        results2 = DemoDataGenerator(seed=99).generate()
+        assert results1.generations[-1].mean_tbv != results2.generations[-1].mean_tbv
 
     def test_metric_series(self):
         gen = DemoDataGenerator(seed=42)
